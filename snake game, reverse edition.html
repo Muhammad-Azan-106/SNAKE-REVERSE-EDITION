@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake - Reverse Edition</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            background-color: #0d0d0d;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        .game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(255, 0, 255, 0.2); /* Purple Glow */
+            border: 4px solid #444;
+            border-radius: 4px;
+        }
+
+        canvas {
+            background-color: #111;
+            display: block;
+            border: 2px solid #222;
+        }
+
+        .ui-panel {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            font-size: 14px;
+            color: #d0f; /* Purple text */
+            text-shadow: 0 0 5px #d0f;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            display: none;
+        }
+
+        .overlay.visible { display: flex; }
+
+        h1 {
+            font-size: 35px;
+            margin: 0 0 20px 0;
+            color: #d0f;
+            text-shadow: 2px 2px #fff;
+            text-align: center;
+        }
+
+        p { font-size: 12px; color: #aaa; line-height: 1.5; text-align: center; }
+
+        .btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: #d0f;
+            color: #000;
+            border: none;
+            font-family: 'Press Start 2P', monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .btn:hover { background: #fff; box-shadow: 0 0 15px #fff; }
+    </style>
+</head>
+<body>
+
+    <div class="ui-panel">
+        <div>Score: <span id="scoreText">0</span></div>
+        <div>Best: <span id="highScoreText">0</span></div>
+    </div>
+
+    <div class="game-container">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        
+        <div id="startScreen" class="overlay visible">
+            <h1>REVERSE<br>SNAKE</h1>
+            <p>Walls Wraps: ON</p>
+            <p>Reverse Move: ON</p>
+            <button class="btn" onclick="startGame()">Start Game</button>
+        </div>
+
+        <div id="gameOverScreen" class="overlay">
+            <h1 style="color: #ff3333">CRASHED</h1>
+            <p>Score: <span id="finalScore">0</span></p>
+            <button class="btn" style="background:#ff3333; color:white;" onclick="resetGame()">Try Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const TILE_SIZE = 20; 
+        const TILE_COUNT = canvas.width / TILE_SIZE; 
+        const GAME_SPEED = 90; 
+
+        let score = 0;
+        let highScore = localStorage.getItem('snakeReverseHighScore') || 0;
+        let gameRunning = false;
+        
+        let snake = [];
+        let food = { x: 0, y: 0 };
+        let dx = 0;
+        let dy = 0;
+        let lastInputDirection = { x: 0, y: 0 };
+
+        const scoreEl = document.getElementById('scoreText');
+        const highScoreEl = document.getElementById('highScoreText');
+        const finalScoreEl = document.getElementById('finalScore');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+
+        highScoreEl.innerText = highScore;
+
+        function startGame() {
+            startScreen.classList.remove('visible');
+            gameOverScreen.classList.remove('visible');
+            resetVariables();
+            gameRunning = true;
+            spawnFood();
+            gameLoop();
+        }
+
+        function resetVariables() {
+            score = 0;
+            scoreEl.innerText = score;
+            snake = [
+                { x: 10, y: 10 },
+                { x: 9, y: 10 },
+                { x: 8, y: 10 }
+            ];
+            dx = 1; dy = 0;
+            lastInputDirection = { x: 1, y: 0 };
+        }
+
+        function resetGame() { startGame(); }
+
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            if (!gameRunning) return;
+            window.requestAnimationFrame(gameLoop);
+            const secondsSinceLastRender = (currentTime - lastTime) / 1000;
+            if (secondsSinceLastRender < GAME_SPEED / 1000) return;
+            lastTime = currentTime;
+            update();
+            draw();
+        }
+
+        function update() {
+            let head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Wall Wrapping (Nokia Style)
+            if (head.x < 0) head.x = TILE_COUNT - 1;
+            else if (head.x >= TILE_COUNT) head.x = 0;
+            if (head.y < 0) head.y = TILE_COUNT - 1;
+            else if (head.y >= TILE_COUNT) head.y = 0;
+
+            // Self Collision Check
+            for (let i = 0; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            snake.unshift(head);
+
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                scoreEl.innerText = score;
+                spawnFood();
+            } else {
+                snake.pop();
+            }
+            
+            lastInputDirection = { x: dx, y: dy };
+        }
+
+        function draw() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Food
+            ctx.fillStyle = '#ff3333';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff3333';
+            ctx.fillRect(food.x * TILE_SIZE, food.y * TILE_SIZE, TILE_SIZE - 2, TILE_SIZE - 2);
+
+            // Snake
+            snake.forEach((segment, index) => {
+                if (index === 0) {
+                    ctx.fillStyle = '#d0f'; // Purple Head
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#d0f';
+                } else {
+                    ctx.fillStyle = '#a0a'; // Darker Purple Body
+                    ctx.shadowBlur = 0;
+                }
+                ctx.fillRect(segment.x * TILE_SIZE, segment.y * TILE_SIZE, TILE_SIZE - 2, TILE_SIZE - 2);
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        function spawnFood() {
+            food = {
+                x: Math.floor(Math.random() * TILE_COUNT),
+                y: Math.floor(Math.random() * TILE_COUNT)
+            };
+            for (let part of snake) {
+                if (part.x === food.x && part.y === food.y) spawnFood();
+            }
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            finalScoreEl.innerText = score;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('snakeReverseHighScore', highScore);
+                highScoreEl.innerText = highScore;
+            }
+            gameOverScreen.classList.add('visible');
+        }
+
+        // --- THE MAGIC REVERSE LOGIC ---
+        document.addEventListener('keydown', changeDirection);
+
+        function changeDirection(event) {
+            const keys = { 37: 'LEFT', 38: 'UP', 39: 'RIGHT', 40: 'DOWN', 65: 'LEFT', 87: 'UP', 68: 'RIGHT', 83: 'DOWN', 32: 'SPACE' };
+            const keyPressed = event.keyCode;
+            
+            if([32, 37, 38, 39, 40].includes(keyPressed)) event.preventDefault();
+
+            if (keyPressed === 32 && !startScreen.classList.contains('visible') && !gameOverScreen.classList.contains('visible')) {
+                gameRunning = !gameRunning;
+                if(gameRunning) gameLoop(0);
+                return;
+            }
+
+            const currentUp = lastInputDirection.y === -1;
+            const currentDown = lastInputDirection.y === 1;
+            const currentRight = lastInputDirection.x === 1;
+            const currentLeft = lastInputDirection.x === -1;
+
+            const desiredMove = keys[keyPressed];
+
+            // 1. Standard Moves (Turning 90 degrees)
+            if (desiredMove === 'LEFT' && !currentRight) { dx = -1; dy = 0; }
+            if (desiredMove === 'UP' && !currentDown) { dx = 0; dy = -1; }
+            if (desiredMove === 'RIGHT' && !currentLeft) { dx = 1; dy = 0; }
+            if (desiredMove === 'DOWN' && !currentUp) { dx = 0; dy = 1; }
+
+            // 2. REVERSE MOVES (The new feature)
+            // If we press Left while going Right, or Up while going Down, etc.
+            if ((desiredMove === 'LEFT' && currentRight) ||
+                (desiredMove === 'RIGHT' && currentLeft) ||
+                (desiredMove === 'UP' && currentDown) ||
+                (desiredMove === 'DOWN' && currentUp)) {
+                
+                // FLIP THE SNAKE
+                snake.reverse(); 
+                
+                // Apply the new direction immediately
+                if (desiredMove === 'LEFT') { dx = -1; dy = 0; }
+                if (desiredMove === 'RIGHT') { dx = 1; dy = 0; }
+                if (desiredMove === 'UP') { dx = 0; dy = -1; }
+                if (desiredMove === 'DOWN') { dx = 0; dy = 1; }
+
+                // Update the 'lastInput' so the game logic knows we flipped
+                lastInputDirection = { x: dx, y: dy };
+            }
+        }
+    </script>
+</body>
+</html>
